@@ -1,0 +1,39 @@
+/**
+ * Render the element
+ * @param {Element} param1 - The object to render(shadowroot)
+ * @returns {undefined}
+ */
+function rendvi(e,t) {
+    const sd = e.shadowRoot || t;
+    const video = sd.querySelector('.abk-video.videoplayer') || sd.createElement('video');
+    const input = sd.querySelector('.abk-video.inputer') || sd.createElement('input');
+    video.addEventListener('click',(e) => {
+        e.target.src = input.value;
+        if(e.target.paused == true) {
+            e.target.play()
+        } else {
+            e.target.pause()
+        }
+    })
+    
+}
+
+function onf(e,t) {
+    const sd = e.shadowRoot || t;
+    console.log(e,sd)
+}
+
+
+
+
+aluk.controls.register(class Abkvideo {
+    constructor() {
+        this.tag = 'abk-video';
+        this.renderer = rendvi;
+        this.onframe = onf;
+        this.inner = `
+        <input type="text" id="inputer" required class="abk-video inputer" value="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm"><br>
+        <video class="abk-video videoplayer" src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" crossorigin="anonymous">
+        `;
+    }
+})

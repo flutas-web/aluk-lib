@@ -1,0 +1,228 @@
+/**
+ * Render the element
+ * @param {Element} param1 - The object to render(shadowroot)
+ * @returns {undefined}
+ */
+/*
+
+**/
+var solve = {
+    chatdata: { apiKey: '' }, // apiKey会在后面设置
+    chatmessages: [],
+    chatOutput: '',
+    
+    Addscript: function(url, insertposition) {
+      var script = document.createElement('script');
+      script.setAttribute('type', 'text/javascript');
+      script.setAttribute('src', url);
+      document.getElementsByTagName(insertposition)[0].appendChild(script);
+    },
+    
+    EscapeHTML: function(html) {
+      let text = document.createTextNode(html);
+      let div = document.createElement('div');
+      div.appendChild(text);
+      return div.innerHTML;
+    },
+    
+    CheckHTML: function(str) {
+      let pattern = /<\s*\/?\s*[a-z]+(?:\s+[a-z]+=(?:"[^"]*"|'[^']*'))*\s*\/?\s*>/i;
+      return pattern.test(str);
+    },
+    
+    addResponseMessage: function(message) {
+      let escapedMessage = solve.EscapeHTML(message);
+      solve.chatOutput = escapedMessage;
+    },
+    
+    sendRequest: async function(data, link) {
+      const response = await fetch(link, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json;charset=UTF-8',
+          'Authorization': 'Bearer ' + data.apiKey,
+          'User-Agent': 'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT10.0; Trident/5.0)',
+        },
+        body: JSON.stringify({
+          "messages": data.prompt,
+          "model": "gpt-3.5-turbo",
+          "max_tokens": 2048,
+          "temperature": 0.5,
+          "top_p": 1,
+          "n": 1,
+          "stream": true
+        })
+      });
+  
+      const reader = response.body.getReader();
+      let str = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        let res = new TextDecoder().decode(value).replace(/^data: /gm, '').replace("[DONE]",'');
+        const lines = res.trim().split(/[\n]+(?=\{)/);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const jsonObj = JSON.parse(line);
+          if (jsonObj.choices && jsonObj.choices[0].delta.content) {
+            str += jsonObj.choices[0].delta.content;
+            await solve.addResponseMessage(str);
+          } else {
+            if (jsonObj.error) {
+              console.error(jsonObj.error.type + " : " + jsonObj.error.message);
+            }
+          }
+        }
+      }
+      return str;
+    },
+  
+    ResponseChatAI: async function(text, connecttype) {
+      let link = solve.chatdata.url || 'https://api.chatanywhere.tech/v1/chat/completions';
+      solve.chatmessages.push({ "role": "user", "content": text });
+      solve.chatdata.prompt = solve.chatmessages;
+      await solve.sendRequest(solve.chatdata, link).then((res) => {
+        solve.chatmessages.push({ "role": "assistant", "content": res });
+      });
+    }
+}
+
+
+
+/*
+
+**/
+
+function rendchat(e, t) {
+    const chatFrame = e;
+    const sendButton = t.getElementById('send-button');
+    const messageInput = t.getElementById('message-input');
+    const messagesContainer = t.getElementById('messages');
+    let last;
+
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    async function sendMessage() {
+        const messageText = messageInput.value.trim();
+
+        if (messageText === '') return;
+
+        rendchat.addMessage('user', messageText);
+        solve.ResponseChatAI(messageText,'https');
+        rendchat.addMessage('ai','',0);
+        messageInput.value = '';
+        function fs() {
+            if(last == solve.chatOutput) return;
+            last = solve.chatOutput;
+            rendchat.addMessage('ai',solve.chatOutput,1);
+            requestAnimationFrame(fs)
+        }
+        requestAnimationFrame(fs)
+    }
+
+    rendchat.addMessage = function(sender,text,type) {
+        const messageElement = type != 1 ? document.createElement('div') : (t.querySelectorAll('.message.ai-message').length == 0? document.createElement('div') : Array.from(t.querySelectorAll('.message.ai-message')).pop());
+        messageElement.classList.add('message', sender === 'user' ? 'user-message' : 'ai-message');
+        messageElement.textContent = text;
+        messagesContainer.appendChild(messageElement);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+}
+
+
+
+
+aluk.controls.register(class ChatFrame {
+    constructor() {
+        this.tag = "chatgpt-frame";
+        this.renderer = rendchat;
+        this.inner = `
+            <div class="chat-container">
+                <div class="messages" id="messages"></div>
+                <div class="input-container">
+                    <textarea id="message-input" placeholder="Type your message..."></textarea>
+                    <button id="send-button">Send</button>
+                </div>
+            </div>
+        `;
+        this.style = `
+            .chat-container {
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+                max-width: 600px;
+                margin: auto;
+                font-family: Arial, sans-serif;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                padding: 10px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }
+
+            .messages {
+                flex: 1;
+                max-height: 300px;
+                overflow-y: auto;
+                padding: 10px;
+                border-bottom: 1px solid #eee;
+            }
+
+            .message {
+                margin: 10px 0;
+                padding: 10px;
+                border-radius: 5px;
+            }
+
+            .user-message {
+                background-color: #daf4fa;
+                text-align: right;
+            }
+
+            .ai-message {
+                background-color: #f4f4f4;
+            }
+
+            .input-container {
+                display: flex;
+                align-items: center;
+                margin-top: 10px;
+            }
+
+            textarea {
+                flex: 1;
+                padding: 10px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                resize: none;
+                height: 50px;
+            }
+
+            button {
+                margin-left: 10px;
+                padding: 10px 20px;
+                border: none;
+                background-color: #007bff;
+                color: white;
+                border-radius: 5px;
+                cursor: pointer;
+                transition: background-color 0.3s ease;
+            }
+
+            button:hover {
+                background-color: #0056b3;
+            }
+        `;
+    }
+
+})
+
+
